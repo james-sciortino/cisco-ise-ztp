@@ -23,18 +23,24 @@ The exact example syntax has its provenance documented. Optional settings stay
 out until their meaning and applicability are established. A plausible-looking
 configuration is not enough evidence to ship a renderer.
 
-## Read the host directly
+## Put the credential boundary on MCP
 
-A standalone host has a narrower operational context than a vCenter-managed
-automation platform. The adapter connects directly with pyVmomi and checks the
-endpoint type before traversing existing inventory. It never relies on Content
-Library, a vCenter REST deployment endpoint, or cluster placement.
+A standalone host does not supply vCenter-only deployment services. The controlled
+path is a fixed MCP runtime that holds the ESXi read credential and verifies TLS.
+The workstation authenticates with its own source-restricted SSH key and verified
+host pin. It receives a small read-only tool surface instead of a general shell.
 
-The useful first checks are deliberately modest: host version/state, basic
-compute capacity, datastore availability/free space, a standard port group, and
-VM-name collision. Their limitations matter. An existing port group cannot prove
-that the guest can synchronize its clock. Physical memory cannot prove that a
-resource reservation will be admitted. The report preserves those unknowns.
+Before querying inventory, the client checks the exact tool list, annotations and
+empty input schemas. It identifies the expected host, then reads VM names,
+datastore usage and snapshot status. Unavailable CPU topology, network and
+reservation facts remain unresolved. A successful request is useful evidence,
+but it is not proof that an ISE installation fits or that every object is visible.
+
+Troubleshooting must preserve that distinction. An SSH connection may work while
+the MCP-to-ESXi HTTPS path is blocked. A firewall object can retain an old address
+even when its label looks right. Read-only inspection of actual object values and
+ordered rules can isolate that mismatch; the owner applies a separately reviewed
+change. Runtime addresses and inventory belong in private evidence, not this article.
 
 ## Make offline behavior the normal path
 
@@ -50,8 +56,8 @@ PYTHONPATH=src python3 -m ise_ztp preflight \
 
 This makes error paths reproducible: remove the port group, reduce free storage,
 or add the intended VM name to the fixture. Tests can verify those decisions
-without creating a VM. The live adapter is mock-tested separately, including TLS
-verification, endpoint rejection, exception privacy, and logout on failure.
+without creating a VM. The live adapter is mock-tested separately, including host-pin
+verification, unexpected-tool rejection, stale observations and exception privacy.
 
 Dry-run deployment currently returns an outline. It cannot create an object or
 be switched into an undocumented apply mode. That limitation is visible in both
@@ -71,10 +77,16 @@ plan certificate recovery, rehearse in isolation, and validate representative
 authentication behavior before cutover. None of those gates is satisfied by a
 successful ESXi login.
 
-## What this first phase demonstrates
+## What this phase demonstrates
 
-The result is a small, runnable foundation with explicit boundaries. It provides
-local feedback today and a constrained read-only adapter for an authorized host
-test later. It does not claim a completed installation or restoration. The next
-engineering milestone is a real-host validation of the adapter, followed by a
-reviewed direct-host deployment implementation and an isolated restore rehearsal.
+The project now uses the existing four-tool interface and retains timestamped
+private evidence. A report can show that reads work while leaving deployment
+blocked by capacity or missing facts. That is a useful outcome: it prevents a
+working transport from being mistaken for a supported installation plan.
+
+The next extension should expose only the missing approved facts. Preserve Home
+AI consumers, review any new server endpoint and identity, and keep deployment
+approval separate from source publication. A future writer requires its own ESXi
+identity, immutable approved parameters, duplicate-execution protection, task
+tracking, post-validation and recovery. Backup restoration remains a later,
+independently validated operation.

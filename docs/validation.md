@@ -9,15 +9,17 @@ PYTHONPATH=src python3 -m ise_ztp preflight --config examples/preflight.example.
 PYTHONPATH=src python3 -m ise_ztp deploy --config examples/preflight.example.json --dry-run
 ```
 
-Tests use temporary local files and synthetic SDK objects. They cover no-network
-defaults, mutual exclusion of live/dry-run, blocked writes, insufficient capacity,
-wrong endpoints, collisions, malformed input, TLS context, session cleanup,
-credential/error non-disclosure, and Git ignore rules. They do not prove real-host
-SDK behavior or an ISE installation. Test data must never come from production.
+Tests use synthetic fixtures, fake MCP sessions and temporary files; they never
+contact a host. Coverage includes offline defaults, explicit mode selection,
+blocked deployment, host mismatch, unexpected tools/parameters, stale responses,
+count/completeness inconsistencies, SSH restrictions and pins, private audit
+placement, unknown capabilities, capacity failures and scrubbed errors.
 
-Regression cases also cover opaque/distributed network rejection, inaccessible
-and unknown datastore capacity, malformed hostnames, nonstandard JSON constants,
-oversize/special-file input, and rejection of abbreviated live-mode flags.
+An authorized live run verifies exact discovery and calls the four current tools
+once each. Preserve timestamps and results privately. Successful reads validate
+that transport and the current responses, not ESXi RBAC, runtime code provenance,
+complete inventory coverage or ISE installation. Native client tool loading is
+separate from the CLI protocol test. Do not run live tests in ordinary CI.
 
 ## Interpretation of reports
 

@@ -2,17 +2,15 @@
 
 ## Workstation and host access
 
-Use Python 3.9+ (a maintained release for operations), a private working directory,
-and an approved package source for the optional pyVmomi dependency. Offline mode
-requires no third-party runtime packages. Live mode later requires network access
-to the ESXi HTTPS port, trusted certificate chain, and a certificate matching the
-configured hostname/IP. A private CA can be supplied with `esxi.ca_file`.
+Use Python 3.11+ and the reviewed optional MCP SDK for live reads. The workstation
+needs only a dedicated restricted SSH key and verified host pin for the MCP server.
+Keep the ESXi read credential and CA trust on that server. Use schema 2 settings;
+there is no direct workstation-to-ESXi adapter or credential-loading fallback.
 
-Use a dedicated ESXi account with read-only access propagated over the complete
-host inventory. Hidden objects can make absence checks misleading. Review access
-coverage manually; preflight does not establish that credentials see everything.
-Lockdown, licensing, or access policy may prevent direct-host access. Resolve
-these through the host owner; do not weaken host security to make the tool pass.
+Verify the fixed command, root-controlled server files, source-restricted key,
+disabled forwarding/TTY, and effective ESXi read-only role through the approved
+administrator. Check inventory visibility: a successful read does not prove that
+all objects are visible. Record the transport approval and private evidence outside Git.
 
 ## ISE media and resources
 
@@ -49,3 +47,11 @@ Record the source version/patch, personas, hostname/FQDN, timezone, certificates
 backup encryption-key reference, and intended target identities privately.
 Arrange capacity for an isolated rehearsal and a rollback/cutover decision with
 the service owner. Preserve the functioning source environment.
+
+## Readiness decisions
+
+Use the [readiness checklist](readiness.md) for exact media/build, licensing,
+certificate, guest-network and backup decisions. CPU and memory reservations must
+be checked against Cisco's [VM size recommendations](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/b_ise_InstallationGuide_chapter_2/r_vmware_appliance_size_recommendations.html).
+The current MCP tools cannot make that admission decision. No final profile is
+selected by this repository.

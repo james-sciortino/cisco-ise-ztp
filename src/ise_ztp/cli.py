@@ -3,9 +3,10 @@ import json
 import logging
 from pathlib import Path
 
+from .audit import Audit
 from .config import load_config, read_json
 from .errors import ProjectError
-from .esxi import collect_inventory
+from .mcp_client import collect_inventory
 from .planning import deployment_plan
 from .preflight import run_preflight
 
@@ -18,7 +19,8 @@ def parser():
     modes = preflight.add_mutually_exclusive_group()
     modes.add_argument("--dry-run", action="store_true", help="Validate settings only; no network or credentials")
     modes.add_argument("--inventory", type=Path, help="Evaluate a local inventory fixture; no network")
-    modes.add_argument("--live", action="store_true", help="Explicitly connect to ESXi for read-only inventory")
+    modes.add_argument("--live", action="store_true", help="Call the four read-only tools through the pinned MCP SSH transport")
+    preflight.add_argument("--audit-dir", type=Path, help="Required for live mode: existing private directory outside Git")
     preflight.add_argument("--format", choices=("text", "json"), default="text")
     deploy = sub.add_parser("deploy", help="Future workflow outline only", allow_abbrev=False)
     deploy.add_argument("--config", type=Path, required=True)
@@ -39,15 +41,22 @@ def main(argv=None):
             log.info("Offline deployment outline completed; no operations executed.")
             return 0
         inventory = None
+        audit = None
         mode = "offline"
         if args.live:
-            log.info("Explicit live read-only preflight selected.")
-            inventory = collect_inventory(config)
+            if args.audit_dir is None:
+                raise ProjectError("Live mode requires --audit-dir outside Git.")
+            audit = Audit(args.audit_dir)
+            log.info("Explicit MCP read-only preflight selected; private audit: %s", audit.path)
+            inventory = collect_inventory(config, audit)
             mode = "live"
         elif args.inventory:
             inventory = read_json(args.inventory)
             mode = "fixture"
         report = run_preflight(config, inventory, mode)
+        if audit is not None:
+            audit.write("report.json", report.to_dict())
+            audit.event("run_completed", failed=report.failed, deployment_ready=False)
         if args.format == "json":
             print(json.dumps(report.to_dict(), indent=2))
         else:

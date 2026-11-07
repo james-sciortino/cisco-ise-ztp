@@ -24,5 +24,13 @@
   ],
   "vm_names": [
     "unrelated-example-vm"
-  ]
+  ],
+  "host_name": "esxi.example.invalid",
+  "power_state": "poweredOn",
+  "overall_status": "green",
+  "snapshot_count": 0,
+  "snapshots_complete": true,
+  "observed_at": {
+    "synthetic_fixture": "2026-01-01T00:00:00+00:00"
+  }
 }

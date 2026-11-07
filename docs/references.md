@@ -36,10 +36,17 @@ are not Cisco requirements.
 - The upgrade page's older “limited to 3.2 patch 2” wording is qualified by its
   explicit statement that backup/restore remains supported for later releases.
   The restore runbook preserves exact patch/backup validation as a separate gate.
-- Live SDK compatibility, host permissions, license limits, media integrity,
-  guest boot, and restore outcomes have not been established by local tests.
-- Review of [pyVmomi 8.0.3 connection code](https://github.com/vmware/pyvmomi/blob/v8.0.3.0.1/pyVim/connect.py)
-  found that initial version discovery does not receive the SOAP timeout and
-  `Disconnect` suppresses logout faults. Documentation now states these limits;
-  an overall supervised-run deadline and confirmed remote session cleanup are
-  not claimed.
+- Authorized MCP reads have been exercised separately from local tests. Effective
+  host privileges, license limits, media integrity, guest boot and restore outcomes
+  remain unverified. Private runtime results are not committed to this document.
+- The workstation now uses MCP, not pyVmomi. The reviewed existing server's SDK
+  negotiation/logout limitations still apply: a local request timeout cannot
+  certify remote cancellation or immediate logout.
+- [Broadcom ManagedEntityStatus](https://developer.broadcom.com/xapis/vsphere-web-services-api/latest/vim.ManagedEntity.Status.html)
+  defines gray as unknown; no hardware-fault cause is inferred.
+- [Cisco's persona disk table](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/b_ise_InstallationGuide_chapter_2/r_disk_space_requirements.html)
+  distinguishes administration/monitoring/standalone sizing from PSN-only sizing.
+  See [readiness](readiness.md); the example is not a selected deployment profile.
+- [Cisco setup requirements](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/b_ise_InstallationGuide_chapter_3/t_runthesetupprogram.html)
+  and the [licensing guide](https://www.cisco.com/c/en/us/products/collateral/security/identity-services-engine/ise-licensing-guide-og.html)
+  govern network/time and entitlement review. These facts are not supplied by host inventory.

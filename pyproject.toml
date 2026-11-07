@@ -7,11 +7,11 @@ name = "cisco-ise-ztp"
 version = "0.1.0"
 description = "Read-only standalone ESXi preflight for Cisco ISE 3.5 native ZTP"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-esxi = ["pyvmomi>=8.0.3,<10"]
+mcp = ["mcp==1.30.0"]
 
 [project.scripts]
 ise-ztp = "ise_ztp.cli:main"

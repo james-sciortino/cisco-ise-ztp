@@ -13,9 +13,11 @@ def deployment_plan(config, dry_run):
         "steps": [
             "Review fresh read-only preflight results and all manual prerequisites.",
             "Review the exact ISE 3.5 media, persona sizing, and standalone ESXi deployment method.",
+            "Approve an immutable plan bound to enrolled project VM identities, placement, media hashes and resource limits.",
+            "Use separately approved MCP write tools and a distinct least-privilege ESXi writer identity.",
             "Create or import a new powered-off VM; allocate storage and resource reservations.",
             "Validate a private Cisco-format ise-ztp.conf; encode locally as Base64.",
-            "Set guestinfo.ise.ztp on that new VM using a verified direct-host mechanism.",
+            "Set guestinfo.ise.ztp on that enrolled VM through a bounded MCP operation using supported standalone ESXi APIs.",
             "Boot and monitor installation; validate ISE service health.",
             "Rotate bootstrap credentials and remove sensitive bootstrap material in an approved cleanup.",
             "Separately review and authorize the ISE 3.4 configuration restoration runbook.",

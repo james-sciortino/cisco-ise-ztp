@@ -1,11 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "esxi": {
-    "host": "esxi.example.invalid",
-    "port": 443,
-    "username_env": "ESXI_USERNAME",
-    "password_env": "ESXI_PASSWORD",
-    "timeout_seconds": 30
+    "host": "esxi.example.invalid"
   },
   "vm": {
     "name": "ise35-example",
@@ -22,5 +18,14 @@
       "8.0"
     ],
     "datastore_headroom_gib": 80
+  },
+  "mcp": {
+    "host": "mcp.example.invalid",
+    "port": 22,
+    "user": "svc-mcp",
+    "identity_file": "/PRIVATE_PATH/codex_ise_mcp_ed25519",
+    "known_hosts_file": "/PRIVATE_PATH/codex_ise_mcp_known_hosts",
+    "host_key_sha256": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "timeout_seconds": 40
   }
 }

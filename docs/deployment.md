@@ -1,13 +1,9 @@
 # Deployment workflow and preflight usage
 
-## Current phase: offline only
+## Offline work
 
-Run the README commands against the supplied examples. The default preflight
-mode is offline, identical to `--dry-run`. Option abbreviations are rejected;
-only the full `--live` flag opts into remote access. `--inventory` evaluates local JSON
-instead of contacting a host. These flags and `--live` are mutually exclusive.
-
-Prepare private settings only when needed:
+Preflight defaults to offline behavior. `--dry-run`, `--inventory` and `--live`
+are mutually exclusive, and abbreviated flags cannot enable access.
 
 ```sh
 umask 077
@@ -15,59 +11,55 @@ mkdir -p local
 cp examples/preflight.example.json local/preflight.json
 ```
 
-Edit that private copy. Do not put usernames or passwords into it; use the named
-environment variables later. `ca_file`, if present, is relative to this settings
-file unless absolute. No `.env` file is automatically loaded.
+Schema 2 uses MCP hostname/SSH port, the `svc-mcp` runtime user, absolute paths to
+a dedicated key and pinned known-host file, the separately verified Ed25519
+fingerprint, and a timeout. The ESXi section contains only the expected inventory
+hostname. There are no ESXi usernames, passwords, CA files or environment-variable
+credential references on the workstation. Do not reuse another consumer's key.
 
-## Later: explicitly authorized read-only access
+## Authorized read-only preflight
 
-The following is a future operator procedure, not part of repository setup.
-Install the optional dependency into a virtual environment, obtain credentials
-through an approved secret manager into `ESXI_USERNAME` / `ESXI_PASSWORD`, and
-review the scope of the read-only account. Avoid plaintext shell assignments or
-command-line password arguments. Then, only when live access is authorized:
+Install the reviewed `mcp` extra into the project's virtual environment. Set up
+the restricted server-side public-key entry through the approved administrator
+procedure; no installation or remote administration is performed by this CLI.
+Both local SSH files must be owned regular files, mode 600. The audit parent must
+already exist, have mode 700, and be outside Git. Example on macOS/Linux:
 
 ```sh
-.venv/bin/ise-ztp preflight --config local/preflight.json --live --format json
+umask 077
+mkdir -p "$HOME/.local/state/ise-ztp"
+.venv/bin/ise-ztp preflight --config local/preflight.json \
+  --live --audit-dir "$HOME/.local/state/ise-ztp" --format json
 ```
 
-This uses the direct ESXi SOAP endpoint, not vCenter. The application does not
-retry failed logins. Treat any FAIL as blocking. WARN and
-SKIP require manual evidence. Even an all-PASS subset is not deployment approval.
-Reports contain check messages, not inventory values. They go to stdout; event
-logs go to stderr. Redirect only into private ignored storage if retention is
-needed. Exit codes: 0 = no evaluated failures, 1 = failed checks, 2 = input or
-operational error, 130 = interruption.
+The output report is scrubbed of inventory identifiers. The log gives the private
+run directory containing `events.jsonl`, `inventory.json` and `report.json`.
+Treat these files as private operational evidence. They are not approval records
+or immutable server audit logs. Missing evidence or failed checks block readiness.
 
-The configured timeout covers SOAP requests, but pyVmomi's initial API-version
-discovery uses its own default socket behavior. DNS and the entire inventory run
-also have no application-enforced deadline. Keep a future live run supervised
-and interrupt a stalled discovery. Do not treat this scaffold as an unattended
-bounded-duration job; an overall deadline is a future runner requirement.
+Exit codes: 0 = no evaluated failures (readiness can still be incomplete),
+1 = one or more failed predicates, 2 = configuration/operational failure,
+130 = interruption. Client deadlines and remote cleanup limits are described in
+[architecture](architecture.md). For errors, use approved administrator diagnostics;
+no shell escape or insecure TLS/SSH option is provided.
 
-## Future deployment implementation
+## Future deployment
 
-1. Verify preflight and manual prerequisites against the precise media/build.
-2. Review a direct-host create/import mechanism and host license/API support.
-   Create a **new, powered-off** VM with the reviewed sizing and guest network.
-3. Review the private `ise-ztp.conf` against Cisco's on-premises syntax. The example
-   is not an input to the project CLI and no renderer/validator is implemented.
-4. Encode the file locally as one Base64 value and set `guestinfo.ise.ztp` through
-   the VM's advanced configuration. Do not use an online encoder for secrets.
-5. Start the installation with the reviewed console/boot configuration, then
-   validate guest service health. Cisco directs ZTP monitoring to the serial
-   console. Follow its first-login password-change flow.
+1. Resolve [readiness gates](readiness.md), including exact media/build and placement.
+2. Review bounded MCP write tools and a separate ESXi writer identity. Obtain approval
+   for its exact permissions and any server deployment identity before establishing access.
+3. Create an immutable approved plan containing enrolled VM identity, approved datastore,
+   standard network, media checksum, resource limits, expiry and operation sequence.
+4. At execution, verify the plan and fresh capacity; claim it once, track ESXi task IDs,
+   audit each transition, and refuse changes to unrelated VMs.
+5. Follow Cisco's new-VM installation procedure. Set a locally encoded, private
+   `ise-ztp.conf` in `guestinfo.ise.ztp` only on that approved VM, then validate boot,
+   required services and first-login credential rotation.
 
-The transport and bootstrap behavior in steps 3–5 follow
-[Cisco's ISE 3.5 ZTP chapter](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/g_referenceinformation/t_zerotouchprovisioning.html).
-Do not confuse project JSON with the guest's key/value file or add generic
-`guestinfo.userdata` settings. Do not invent keys for backup restoration.
+[Cisco's ZTP chapter](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/g_referenceinformation/t_zerotouchprovisioning.html)
+governs bootstrap behavior. No renderer or writer is implemented. The dry-run
+outline is not an immutable executable plan and cannot authorize infrastructure work.
 
-After acceptance, plan explicit removal of the guestinfo secret and any private
-plaintext/encoded temporary files, plus rotation of bootstrap credentials.
-Removal is project security policy, not an automated feature or a claim that
-Cisco removes the value itself. Preserve only approved, sanitized evidence.
-
-The `deploy --dry-run` command prints this future sequence without reading media,
-ZTP, backup files, or credentials. It never calls a writer. There is no `--apply`
-option. Restore and cutover follow their own reviewed runbook.
+After acceptance, separately approve removal of bootstrap secrets and private
+artifacts. On failure, stop and preserve task/audit evidence; do not automatically
+delete or rebuild anything. Restore/cutover follow [their own runbook](backup-restoration.md).

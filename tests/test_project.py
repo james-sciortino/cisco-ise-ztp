@@ -2,11 +2,9 @@ import copy
 import io
 import json
 import os
-import ssl
 import subprocess
 import sys
 import tempfile
-import types
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -15,7 +13,6 @@ from unittest.mock import Mock, patch
 from ise_ztp.cli import main, parser
 from ise_ztp.config import MAX_JSON_BYTES, load_config, read_json
 from ise_ztp.errors import ConfigError, PreflightError, ProjectError
-from ise_ztp.esxi import collect_inventory
 from ise_ztp.planning import deployment_plan
 from ise_ztp.preflight import run_preflight
 
@@ -138,10 +135,20 @@ class ConfigTests(unittest.TestCase):
                 self.load_modified(modify)
             self.assertNotIn("SENSITIVE_SENTINEL", str(caught.exception))
 
-    def test_ca_path_relative_to_settings_file(self):
-        config = self.load_modified(lambda d: d["esxi"].update(ca_file="trust.pem"))
-        self.assertTrue(Path(config.esxi["ca_file"]).is_absolute())
-        self.assertEqual(Path(config.esxi["ca_file"]).name, "trust.pem")
+    def test_old_direct_host_configuration_rejected(self):
+        with self.assertRaises(ConfigError):
+            self.load_modified(lambda d: d["esxi"].update(ca_file="trust.pem"))
+
+    def test_mcp_cannot_select_admin_shell_or_unreviewed_trust(self):
+        changes = [
+            {"command": "python"}, {"user": "root"}, {"port": True},
+            {"timeout_seconds": 0}, {"host": "-oProxyCommand=bad"},
+            {"identity_file": "relative-key"}, {"identity_file": "/keys/%h"},
+            {"known_hosts_file": "/keys/$USER"}, {"host_key_sha256": "unverified"},
+        ]
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(ConfigError):
+                self.load_modified(lambda d: d["mcp"].update(change))
 
     def test_invalid_hostnames_rejected_before_any_connection(self):
         for host in ("esxi..invalid", "esxi.-invalid", "esxi-.invalid", "a" * 64 + ".invalid",
@@ -197,8 +204,15 @@ class ConfigTests(unittest.TestCase):
 
 
 class CliSafetyTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch("ise_ztp.cli.Audit")
+        self.audit = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def invoke(self, arguments):
         output = io.StringIO()
+        if "--live" in arguments:
+            arguments = arguments + ["--audit-dir", "/private/test-audit"]
         with redirect_stdout(output):
             code = main(arguments)
         return code, output.getvalue()
@@ -259,122 +273,13 @@ class CliSafetyTests(unittest.TestCase):
         self.assertNotIn("SENSITIVE_SENTINEL", " ".join(logs.output))
 
 
-class AdapterTests(unittest.TestCase):
-    """Fake SDK modules make any real connection impossible in this suite."""
-
-    def setUp(self):
-        self.config = load_config(CONFIG)
-        ns = types.SimpleNamespace
-        classes = {name: type(name, (), {}) for name in ("HostSystem", "Folder", "Datacenter", "ComputeResource", "Network")}
-        self.vim = ns(**classes,
-                      OpaqueNetwork=type("OpaqueNetwork", (classes["Network"],), {}),
-                      dvs=ns(DistributedVirtualPortgroup=type("DistributedVirtualPortgroup", (classes["Network"],), {})))
-        host = self.vim.HostSystem()
-        self.host = host
-        host.summary = ns(hardware=ns(numCpuThreads=64, cpuMhz=2400, memorySize=137438953472),
-                          runtime=ns(connectionState="connected", inMaintenanceMode=False),
-                          quickStats=ns(overallMemoryUsage=16384))
-        network = self.vim.Network()
-        network.name = "example-ise-network"
-        network.summary = ns(accessible=True)
-        host.network = [network]
-        host.datastore = [ns(summary=ns(name="example-datastore", accessible=True, freeSpace=2199023255552, maintenanceMode="normal"))]
-        host.vm = []
-        compute = self.vim.ComputeResource()
-        compute.host = [host]
-        folder = self.vim.Folder()
-        folder.childEntity = [compute]
-        dc = self.vim.Datacenter()
-        dc.hostFolder = folder
-        root = self.vim.Folder()
-        root.childEntity = [dc]
-        self.content = ns(about=ns(apiType="HostAgent", version="8.0.3"), rootFolder=root)
-        self.service = Mock()
-        self.service.RetrieveContent.return_value = self.content
-        self.connect = Mock(return_value=self.service)
-        self.disconnect = Mock()
-        modules = {"pyVim": types.ModuleType("pyVim"), "pyVim.connect": types.ModuleType("pyVim.connect"), "pyVmomi": types.ModuleType("pyVmomi")}
-        modules["pyVim.connect"].SmartConnect = self.connect
-        modules["pyVim.connect"].Disconnect = self.disconnect
-        modules["pyVmomi"].vim = self.vim
-        self.addCleanup(patch.stopall)
-        patch.dict(sys.modules, modules).start()
-        patch.dict("os.environ", {"ESXI_USERNAME": "synthetic-user", "ESXI_PASSWORD": "SENSITIVE_SENTINEL"}, clear=True).start()
-
-    def test_only_inventory_calls_with_verified_tls_and_cleanup(self):
-        inventory = collect_inventory(self.config)
-        self.assertFalse(run_preflight(self.config, inventory).failed)
-        options = self.connect.call_args.kwargs
-        self.assertEqual(options["sslContext"].verify_mode, ssl.CERT_REQUIRED)
-        self.assertTrue(options["sslContext"].check_hostname)
-        self.assertEqual(options["httpConnectionTimeout"], 30)
-        self.assertEqual([call[0] for call in self.service.mock_calls], ["RetrieveContent"])
-        self.disconnect.assert_called_once_with(self.service)
-        self.assertNotIn("SENSITIVE_SENTINEL", json.dumps(inventory))
-
-    def test_vcenter_rejected_and_logged_out(self):
-        self.content.about.apiType = "VirtualCenter"
-        with self.assertRaises(PreflightError):
-            collect_inventory(self.config)
-        self.disconnect.assert_called_once_with(self.service)
-
-    def test_sdk_error_suppressed_and_logged_out(self):
-        self.service.RetrieveContent.side_effect = RuntimeError("SENSITIVE_SENTINEL")
-        with self.assertRaises(PreflightError) as caught:
-            collect_inventory(self.config)
-        self.assertNotIn("SENSITIVE_SENTINEL", str(caught.exception))
-        self.disconnect.assert_called_once()
-
-    def test_tls_failure_has_safe_error(self):
-        self.connect.side_effect = ssl.SSLCertVerificationError("SENSITIVE_SENTINEL")
-        with self.assertRaises(PreflightError) as caught:
-            collect_inventory(self.config)
-        self.assertIn("TLS verification failed", str(caught.exception))
-        self.assertNotIn("SENSITIVE_SENTINEL", str(caught.exception))
-        self.disconnect.assert_not_called()
-
-    def test_missing_credentials_never_connects(self):
-        with patch.dict("os.environ", {}, clear=True), self.assertRaises(PreflightError):
-            collect_inventory(self.config)
-        self.connect.assert_not_called()
-
-    def test_opaque_and_distributed_networks_are_not_standard(self):
-        for network_type in (self.vim.OpaqueNetwork, self.vim.dvs.DistributedVirtualPortgroup):
-            with self.subTest(network_type=network_type):
-                network = network_type()
-                network.name = "example-ise-network"
-                network.summary = types.SimpleNamespace(accessible=True)
-                self.host.network = [network]
-                inventory = collect_inventory(self.config)
-                self.assertFalse(inventory["networks"][0]["standard"])
-                self.assertTrue(run_preflight(self.config, inventory).failed)
-
-    def test_inaccessible_datastore_capacity_discarded(self):
-        self.host.datastore[0].summary.accessible = False
-        inventory = collect_inventory(self.config)
-        self.assertIsNone(inventory["datastores"][0]["free_bytes"])
-        self.assertTrue(run_preflight(self.config, inventory).failed)
-
-    def test_invalid_ca_prevents_connection(self):
-        with patch("ise_ztp.esxi.ssl.create_default_context", side_effect=OSError("SENSITIVE_SENTINEL")):
-            with self.assertRaises(PreflightError) as caught:
-                collect_inventory(self.config)
-        self.connect.assert_not_called()
-        self.assertNotIn("SENSITIVE_SENTINEL", str(caught.exception))
-
-    def test_ambiguous_host_inventory_fails(self):
-        self.content.rootFolder.childEntity *= 2
-        with self.assertRaises(PreflightError):
-            collect_inventory(self.config)
-        self.disconnect.assert_called_once()
-
-
 class GitHygieneTests(unittest.TestCase):
     def test_sensitive_paths_ignored_and_example_trackable(self):
         sensitive = ["local/preflight.json", "local/inventory.json", "local/ise-ztp.conf", "ise-ztp.conf",
                      "local/anything.txt", "payload.b64", ".env", ".env.production", "private.key",
                      "backups/original.tar.gpg", "secret.pem", "installer.iso", "vm.ova", "run.log",
-                     "payload.base64", "id_ecdsa", "putty.ppk", "private.der", "trust.jks"]
+                     "payload.base64", "id_ecdsa", "putty.ppk", "private.der", "trust.jks",
+                     "codex_ise_mcp_ed25519", "service.pub", "private_known_hosts", "actual-inventory.json"]
         result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], input="\n".join(sensitive) + "\n",
                                 cwd=ROOT, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)

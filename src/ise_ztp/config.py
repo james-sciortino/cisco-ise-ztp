@@ -64,6 +64,7 @@ def integer(value, minimum=1, maximum=10000000):
 
 @dataclass(frozen=True, repr=False)
 class Config:
+    mcp: Dict[str, Any]
     esxi: Dict[str, Any]
     vm: Dict[str, Any]
     policy: Dict[str, Any]
@@ -71,33 +72,31 @@ class Config:
 
 def load_config(path: Path) -> Config:
     data = read_json(path)
-    fields(data, ("schema_version", "esxi", "vm", "policy"))
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
-        raise ConfigError("Only schema_version 1 is supported.")
+    fields(data, ("schema_version", "mcp", "esxi", "vm", "policy"))
+    if type(data["schema_version"]) is not int or data["schema_version"] != 2:
+        raise ConfigError("Only schema_version 2 is supported; migrate direct-host settings to MCP.")
     esxi, vm, policy = data["esxi"], data["vm"], data["policy"]
-    fields(esxi, ("host", "port", "username_env", "password_env", "timeout_seconds"), ("ca_file",))
-    for key in ("host", "username_env", "password_env"):
-        text_value(esxi[key])
-    try:
-        ipaddress.ip_address(esxi["host"])
-    except ValueError:
-        hostname = esxi["host"].removesuffix(".")
-        labels = hostname.split(".")
-        valid_label = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-        if (len(hostname) > 253 or all(c in "0123456789." for c in hostname)
-                or not all(re.fullmatch(valid_label, label) for label in labels)):
-            raise ConfigError("ESXi host must be a hostname or IP address, not a URL or credentials.") from None
-    for key in ("username_env", "password_env"):
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", esxi[key]):
-            raise ConfigError("Credential references must be uppercase environment variable names.")
-    if esxi["username_env"] == esxi["password_env"]:
-        raise ConfigError("Username and password references must be different.")
-    integer(esxi["port"], 1, 65535)
-    integer(esxi["timeout_seconds"], 1, 120)
-    if "ca_file" in esxi:
-        text_value(esxi["ca_file"])
-        ca = Path(esxi["ca_file"]).expanduser()
-        esxi["ca_file"] = str(ca if ca.is_absolute() else path.resolve().parent / ca)
+    mcp = data["mcp"]
+    fields(esxi, ("host",))
+    fields(mcp, ("host", "port", "user", "identity_file", "known_hosts_file", "host_key_sha256", "timeout_seconds"))
+    for host in (esxi["host"], mcp["host"]):
+        hostname_value(host)
+    if mcp["user"] != "svc-mcp":
+        raise ConfigError("This transport is restricted to the reviewed svc-mcp runtime account.")
+    integer(mcp["port"], 1, 65535)
+    integer(mcp["timeout_seconds"], 5, 120)
+    if not isinstance(mcp["host_key_sha256"], str) or not re.fullmatch(r"SHA256:[A-Za-z0-9+/]{43}", mcp["host_key_sha256"]):
+        raise ConfigError("A separately verified Ed25519 server SHA256 fingerprint is required.")
+    for key in ("identity_file", "known_hosts_file"):
+        text_value(mcp[key])
+        value = Path(mcp[key]).expanduser()
+        if not value.is_absolute():
+            raise ConfigError("SSH identity and host-pin paths must be absolute.")
+        if any(c in str(value) for c in '%$"\\'):
+            raise ConfigError("SSH paths must not contain expansion tokens, quotes or backslashes.")
+        mcp[key] = str(value)
+    if mcp["identity_file"] == mcp["known_hosts_file"]:
+        raise ConfigError("SSH identity and host-pin files must be distinct.")
     fields(vm, ("name", "datastore", "port_group", "vcpus", "memory_gib", "disk_gib", "cpu_reservation_mhz"))
     for key in ("name", "datastore", "port_group"):
         text_value(vm[key])
@@ -108,4 +107,17 @@ def load_config(path: Path) -> Config:
     if not isinstance(versions, list) or not versions or any(v not in ("7.0", "8.0", "9.0") for v in versions):
         raise ConfigError("Version policy must select reviewed ISE 3.5 ESXi families: 7.0, 8.0, or 9.0.")
     integer(policy["datastore_headroom_gib"], 0)
-    return Config(esxi, vm, policy)
+    return Config(mcp, esxi, vm, policy)
+
+
+def hostname_value(value):
+    text_value(value)
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        hostname = value.removesuffix(".")
+        labels = hostname.split(".")
+        valid_label = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+        if (len(hostname) > 253 or all(c in "0123456789." for c in hostname)
+                or not all(re.fullmatch(valid_label, label) for label in labels)):
+            raise ConfigError("Endpoint must be a hostname or IP address, not a URL or credentials.") from None

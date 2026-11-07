@@ -8,6 +8,11 @@
 /media/
 /config/
 /configs/
+/work/
+/audit/
+*known_hosts*
+*inventory*.json
+!examples/inventory.example.json
 .env
 .env.*
 *.local.*
@@ -15,6 +20,8 @@
 *credentials*
 *.pem
 *.key
+*.pub
+*_ed25519*
 *.p12
 *.pfx
 *.crt
