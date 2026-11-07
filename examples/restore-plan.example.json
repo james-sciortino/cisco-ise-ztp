@@ -1,0 +1,19 @@
+{
+  "purpose": "Planning worksheet only; not consumed by the CLI or Cisco ZTP",
+  "source_release": "3.4",
+  "source_patch": "RECORD_EXACT_PATCH",
+  "target_release": "3.5",
+  "target_patch": "REVIEW_BEFORE_RESTORE",
+  "backup_type": "configuration",
+  "backup_location": "SECURE_EXTERNAL_REPOSITORY",
+  "original_backup_filename": "RECORD_ORIGINAL_FILENAME_PRIVATELY",
+  "backup_sha256": "RECORD_DIGEST_PRIVATELY",
+  "encryption_key_reference": "SECRET_MANAGER_REFERENCE_ONLY",
+  "source_node_identity": "RECORD_PRIVATELY",
+  "target_node_identity": "RECORD_PRIVATELY",
+  "certificate_and_ca_recovery_plan": "REQUIRED",
+  "include_adeos": false,
+  "compatibility_review_complete": false,
+  "isolated_restore_test_complete": false,
+  "cutover_authorized": false
+}

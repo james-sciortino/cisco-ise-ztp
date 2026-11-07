@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cisco-ise-ztp"
+version = "0.1.0"
+description = "Read-only standalone ESXi preflight for Cisco ISE 3.5 native ZTP"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+esxi = ["pyvmomi>=8.0.3,<10"]
+
+[project.scripts]
+ise-ztp = "ise_ztp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

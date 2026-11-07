@@ -1,0 +1,15 @@
+# EXAMPLE ONLY. Copy to ignored local/ise-ztp.conf and review before future use.
+# Syntax provenance and limitations: examples/README.md and docs/references.md.
+# Documentation-only IP addresses; replace all site values in the private copy.
+# password is an unusable placeholder, not a supplied credential.
+hostname=ise35-example
+ipv4_addr=192.0.2.20
+ipv4_mask=255.255.255.0
+ipv4_default_gw=192.0.2.1
+domain=example.invalid
+primary_nameserver=192.0.2.53
+primary_ntpserver=192.0.2.123
+timezone=Etc/UTC
+ssh=true
+username=admin
+password=<SET_PRIVATELY_AT_DEPLOYMENT_TIME>

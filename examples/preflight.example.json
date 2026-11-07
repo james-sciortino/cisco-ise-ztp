@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "esxi": {
+    "host": "esxi.example.invalid",
+    "port": 443,
+    "username_env": "ESXI_USERNAME",
+    "password_env": "ESXI_PASSWORD",
+    "timeout_seconds": 30
+  },
+  "vm": {
+    "name": "ise35-example",
+    "datastore": "example-datastore",
+    "port_group": "example-ise-network",
+    "vcpus": 16,
+    "memory_gib": 32,
+    "disk_gib": 600,
+    "cpu_reservation_mhz": 16000
+  },
+  "policy": {
+    "allowed_esxi_versions": [
+      "7.0",
+      "8.0"
+    ],
+    "datastore_headroom_gib": 80
+  }
+}
