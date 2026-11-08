@@ -1,65 +1,85 @@
-# Deployment workflow and preflight usage
+# Manual ISE ZTP deployment
 
-## Offline work
+## Prepare
 
-Preflight defaults to offline behavior. `--dry-run`, `--inventory` and `--live`
-are mutually exclusive, and abbreviated flags cannot enable access.
+Use Cisco's [ISE 3.5 installation procedure](references.md) and confirm the selected
+OVA, ESXi compatibility, persona sizing, reservations, disk provisioning, storage
+capacity, licensing, network mapping, DNS and NTP before starting. The example
+addresses are fictional and will not work unchanged.
+
+Cisco's production standalone/PAN/MnT disk guidance calls for at least 600 GB.
+Availability of a 300 GB OVA does not make that disk size appropriate for every
+persona. Select the supported profile for the intended role and workload.
+
+For a replacement, retain a current off-host native ISE backup, its encryption
+key, certificate/private-key and CA recovery exports, and the original release
+and patch media. Review the outage and recovery plan before retiring the source.
+Stopping a VM does not reclaim its disk space. This guide includes no deletion
+procedure. Never run old and new nodes with the same IP address simultaneously.
+
+## Create the private file
+
+Copy `examples/ise-ztp.conf.example` to `local/ise-ztp.conf`. Use a plain-text editor.
+In macOS TextEdit, choose **Format > Make Plain Text**, disable smart quotes, and
+keep the `.conf` filename without an added `.txt` extension.
+
+Set the short lowercase hostname and domain separately. Supply the IP, mask,
+gateway, DNS servers, NTP server, timezone, SSH preference and administrator
+credentials. Secondary and tertiary DNS entries are optional; remove unused
+entries. Use real reachable servers. Replace the entire password placeholder,
+including angle brackets, with an ISE-compliant password. Do not add quotes.
+
+The private file may be moved elsewhere; update the encoding command accordingly.
+Keep it private and out of Git. This configuration bootstraps ISE only: it does
+not install a patch or restore a backup automatically.
+
+## Encode locally on macOS
+
+In Terminal, replace the example path below with the absolute path to your file:
 
 ```sh
-umask 077
-mkdir -p local
-cp examples/preflight.example.json local/preflight.json
+base64 -i "/absolute/path/to/ise-ztp.conf" | tr -d '\r\n' | pbcopy
 ```
 
-Schema 2 uses MCP hostname/SSH port, the `svc-mcp` runtime user, absolute paths to
-a dedicated key and pinned known-host file, the separately verified Ed25519
-fingerprint, and a timeout. The ESXi section contains only the expected inventory
-hostname. There are no ESXi usernames, passwords, CA files or environment-variable
-credential references on the workstation. Do not reuse another consumer's key.
+This puts one Base64 string on your clipboard. Repeat after every edit. Do not
+encode this guide or the unchanged example. Do not use an online encoder:
+Base64 is reversible and includes the password.
 
-## Authorized read-only preflight
+## Configure ESXi
 
-Install the reviewed `mcp` extra into the project's virtual environment. Set up
-the restricted server-side public-key entry through the approved administrator
-procedure; no installation or remote administration is performed by this CLI.
-Both local SSH files must be owned regular files, mode 600. The audit parent must
-already exist, have mode 700, and be outside Git. Example on macOS/Linux:
+1. In the standalone ESXi Host Client, import the approved ISE OVA. Disable
+   automatic power-on and select the appropriate deployment profile.
+2. While powered off, verify CPU, memory and reservations, disk/datastore, and
+   management NIC port-group mapping. Review each NIC's connect state explicitly.
+3. Open **Edit settings > VM Options > Advanced > Edit Configuration** (the UI
+   may group this under **Configuration Parameters**).
+4. Add the parameter `guestinfo.ise.ztp`. Paste the encoded string as its value
+   and save. This is the file's encoded contents, not its filename or path.
+5. Configure serial-console monitoring according to Cisco's procedure. Confirm
+   the source node is off if reusing its identity, then power on the replacement.
+6. Monitor ZTP through the serial console. Cisco documents VM-console monitoring
+   once the setup prompt appears. DNS and NTP must work from the guest network.
 
-```sh
-umask 077
-mkdir -p "$HOME/.local/state/ise-ztp"
-.venv/bin/ise-ztp preflight --config local/preflight.json \
-  --live --audit-dir "$HOME/.local/state/ise-ztp" --format json
-```
+No ZTP configuration image is needed for this VM-user-data method. ESXi does not
+need access to the original configuration file. Do not apply cloud-specific ZTP
+key names to this on-premises configuration.
 
-The output report is scrubbed of inventory identifiers. The log gives the private
-run directory containing `events.jsonl`, `inventory.json` and `report.json`.
-Treat these files as private operational evidence. They are not approval records
-or immutable server audit logs. Missing evidence or failed checks block readiness.
+## After setup
 
-Exit codes: 0 = no evaluated failures (readiness can still be incomplete),
-1 = one or more failed predicates, 2 = configuration/operational failure,
-130 = interruption. Client deadlines and remote cleanup limits are described in
-[architecture](architecture.md). For errors, use approved administrator diagnostics;
-no shell escape or insecure TLS/SSH option is provided.
+Complete the initial GUI password change and [validation checklist](validation.md).
+For a backup/restore migration, apply the reviewed patch for the target release
+before restoring the native backup. Keep patch downloads in their original
+format and verify the publisher checksum before use; Safari can automatically
+expand `.tar.gz` downloads if “Open safe files after downloading” is enabled.
 
-## Future deployment
+After successful bootstrap and credential rotation, arrange removal of the
+sensitive VM parameter and unnecessary local/encoded copies. Replace clipboard
+contents with harmless text. Keep credentials out of screenshots and logs.
 
-1. Resolve [readiness gates](readiness.md), including exact media/build and placement.
-2. Review bounded MCP write tools and a separate ESXi writer identity. Obtain approval
-   for its exact permissions and any server deployment identity before establishing access.
-3. Create an immutable approved plan containing enrolled VM identity, approved datastore,
-   standard network, media checksum, resource limits, expiry and operation sequence.
-4. At execution, verify the plan and fresh capacity; claim it once, track ESXi task IDs,
-   audit each transition, and refuse changes to unrelated VMs.
-5. Follow Cisco's new-VM installation procedure. Set a locally encoded, private
-   `ise-ztp.conf` in `guestinfo.ise.ztp` only on that approved VM, then validate boot,
-   required services and first-login credential rotation.
+## If setup fails
 
-[Cisco's ZTP chapter](https://www.cisco.com/c/en/us/td/docs/security/ise/3-5/install_guide/b_ise_Installation_Guide_35/g_referenceinformation/t_zerotouchprovisioning.html)
-governs bootstrap behavior. No renderer or writer is implemented. The dry-run
-outline is not an immutable executable plan and cannot authorize infrastructure work.
-
-After acceptance, separately approve removal of bootstrap secrets and private
-artifacts. On failure, stop and preserve task/audit evidence; do not automatically
-delete or rebuild anything. Restore/cutover follow [their own runbook](backup-restoration.md).
+Check the serial-console error and validate IP/mask/gateway, network mapping,
+forward/reverse DNS and NTP. Do not bypass checks to hide a connectivity issue.
+For incorrect user data, follow Cisco's retry procedure: power off, correct the
+private file, regenerate Base64, replace the VM parameter and restart. Escalate
+unexplained errors with the specific installer messages, excluding secrets.

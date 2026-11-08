@@ -1,15 +1,15 @@
-# EXAMPLE ONLY. Copy to ignored local/ise-ztp.conf and review before future use.
-# Syntax provenance and limitations: examples/README.md and docs/references.md.
-# Documentation-only IP addresses; replace all site values in the private copy.
-# password is an unusable placeholder, not a supplied credential.
-hostname=ise35-example
+# Fictional example: copy to ignored local/ise-ztp.conf before editing.
+# Replace all site values and the entire password placeholder before encoding.
+hostname=ise
 ipv4_addr=192.0.2.20
 ipv4_mask=255.255.255.0
 ipv4_default_gw=192.0.2.1
 domain=example.invalid
 primary_nameserver=192.0.2.53
-primary_ntpserver=192.0.2.123
-timezone=Etc/UTC
+secondary_nameserver=192.0.2.54
+tertiary_nameserver=192.0.2.55
+primary_ntpserver=ntp.example.invalid
+timezone=America/New_York
 ssh=true
 username=admin
-password=<SET_PRIVATELY_AT_DEPLOYMENT_TIME>
+password=<REPLACE_WITH_YOUR_BOOTSTRAP_PASSWORD>

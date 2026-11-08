@@ -16,6 +16,8 @@
 .env
 .env.*
 *.local.*
+*.private.*
+server-policy*.json
 *.secret.*
 *credentials*
 *.pem
