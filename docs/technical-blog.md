@@ -19,3 +19,14 @@ Use fictional addresses and placeholders. Never publish the real configuration,
 Base64 payload, secrets, certificates, inventories or internal infrastructure
 names. Separate documented Cisco requirements from any lab sizing exceptions.
 Link to the [official references](references.md) and state what was actually tested.
+
+## Observed issues to include after resolution
+
+- ZTP consumed the supplied settings, then stopped at NTP synchronization with
+  `pool.ntp.org`. A retry with the displayed default `time.nist.gov` was proposed;
+  do not attribute the cause or claim a fix without confirming the outcome.
+- Restore rejected a case mismatch between source and destination hostnames.
+  A case-only CLI rename did not resolve it: CLI and GUI identities differed.
+  Preserve source capitalization and verify application identity before restore.
+- Rebuild with matching capitalization is a proposed next step, not a completed
+  or validated workaround. Record the actual resolution before publication.

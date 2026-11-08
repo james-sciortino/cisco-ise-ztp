@@ -4,7 +4,9 @@ These are checks to perform, not claims of completed testing.
 
 ## Initial installation
 
-- [ ] Confirm the expected ISE version, hostname and IP address.
+- [ ] Confirm the expected ISE version, hostname and IP address. For a restore,
+      match backup hostname/domain capitalization exactly in both CLI and GUI;
+      a case-only CLI rename alone is not sufficient evidence.
 - [ ] Confirm ISE application services are running.
 - [ ] Validate DNS resolution, time synchronization and network reachability.
 - [ ] Complete the first GUI login and required bootstrap password change.

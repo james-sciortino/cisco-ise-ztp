@@ -1,5 +1,6 @@
 # Fictional example: copy to ignored local/ise-ztp.conf before editing.
 # Replace all site values and the entire password placeholder before encoding.
+# For replacement: preserve the backup hostname capitalization exactly.
 hostname=ise
 ipv4_addr=192.0.2.20
 ipv4_mask=255.255.255.0
@@ -8,7 +9,8 @@ domain=example.invalid
 primary_nameserver=192.0.2.53
 secondary_nameserver=192.0.2.54
 tertiary_nameserver=192.0.2.55
-primary_ntpserver=ntp.example.invalid
+# Setup default shown in the observed run; verify reachability from the guest.
+primary_ntpserver=time.nist.gov
 timezone=America/New_York
 ssh=true
 username=admin

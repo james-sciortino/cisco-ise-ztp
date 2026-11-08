@@ -23,7 +23,9 @@ Copy `examples/ise-ztp.conf.example` to `local/ise-ztp.conf`. Use a plain-text e
 In macOS TextEdit, choose **Format > Make Plain Text**, disable smart quotes, and
 keep the `.conf` filename without an added `.txt` extension.
 
-Set the short lowercase hostname and domain separately. Supply the IP, mask,
+Set the short hostname and domain separately. For a new identity Cisco recommends
+lowercase; for a replacement, preserve the backup hostname and domain capitalization
+exactly. Do not silently normalize an existing identity. Supply the IP, mask,
 gateway, DNS servers, NTP server, timezone, SSH preference and administrator
 credentials. Secondary and tertiary DNS entries are optional; remove unused
 entries. Use real reachable servers. Replace the entire password placeholder,
@@ -83,3 +85,40 @@ forward/reverse DNS and NTP. Do not bypass checks to hide a connectivity issue.
 For incorrect user data, follow Cisco's retry procedure: power off, correct the
 private file, regenerate Base64, replace the VM parameter and restart. Escalate
 unexplained errors with the specific installer messages, excluding secrets.
+
+## NTP synchronization failure
+
+The observed bootstrap consumed the configuration but stopped with
+`Sync with NTP server failed` while using `pool.ntp.org`. The next troubleshooting
+choice was `time.nist.gov`, the default displayed by the setup prompt:
+
+```ini
+primary_ntpserver=time.nist.gov
+```
+
+This is a retry choice, not proof that the pool service caused the failure or
+that NIST is required. Confirm DNS resolution and bidirectional NTP communication
+from the guest network (UDP destination port 123 and return traffic). Permissive
+outbound rules alone do not prove synchronization works. Do not skip NTP checks.
+Power off the failed VM, edit the private configuration, regenerate Base64,
+replace `guestinfo.ise.ztp`, and follow Cisco's documented retry procedure.
+
+## Restore rejects hostname capitalization
+
+In the observed attempt, the backup and new hostname differed only in case.
+Restore explicitly rejected that mismatch. A case-only CLI rename changed
+`show running-config`, but the GUI continued to show lowercase and restore still
+failed. A successful CLI command alone was not enough to certify the identity.
+
+Before patching or restoring a replacement, verify the expected capitalization
+in both the CLI and the Deployment page after services finish starting and a
+fresh GUI login. Also confirm the domain matches the backup. Do not edit the
+backup archive or its filename to work around the check.
+
+Cisco documents hostname changes with service restarts and certificate/AD
+implications. This project has not validated a fix for the retained lowercase
+application identity. A fresh replacement using the exact source capitalization
+is a proposed recovery attempt, not a proven remedy. Preserve off-host recovery
+materials and obtain separate approval before deleting/rebuilding anything.
+If a clean setup also normalizes the name or restoration still rejects it,
+stop and involve Cisco TAC rather than repeating rebuilds.
